@@ -1,7 +1,6 @@
-
 library(tidyverse)
-## library(ecoreg)
-source("../eco_reg_source.R", echo = FALSE)
+library(ecoreg)
+## source("../eco_reg_source.R", echo = FALSE)
 
 psw <- readRDS("working/munged_psw.rds")
 ind <- readRDS("working/ind_data.rds")
@@ -89,6 +88,20 @@ system.time(eco_model <- eco(cbind(successes, count) ~
 ### Have we achieved convergence?
 (eco_model$aux$res$convergence == 0)
 
+### Let's try again
+
+### How do the coefficients compare?
+my_alpha <- -0.33
+beta_age <- seq(-2, 2, length.out = 8)
+### Make the fourth group zero
+beta_age <- beta_age - beta_age[4]
+beta_educ <- c(seq(0, 4, length.out = 4),
+               -1, 0)
+beta_ab <- 0.2
+beta_owns <- 1.2
+my_pars <- c(my_alpha, beta_ab, beta_owns,
+             beta_age, beta_educ)
+
 system.time(eco_model2 <- eco(cbind(successes, count) ~
                      p.ab + p.owns,
                  categorical = eco_categorical,
@@ -100,16 +113,6 @@ system.time(eco_model2 <- eco(cbind(successes, count) ~
                  control = list(maxit = 1e6,
                  reltol = 1e-16)))
 
-### How do the coefficients compare?
-alpha <- -0.33
-beta_age <- seq(-2, 2, length.out = 8)
-### Make the fourth group zero
-beta_age <- beta_age - beta_age[4]
-beta_educ <- c(seq(0, 4, length.out = 4),
-               -1, 0)
-beta_ab <- 0.2
-beta_owns <- 1.2
-
 cbind(c(beta_age[-4], beta_educ[-1]),
       log(eco_model$ors.indiv))
 
@@ -119,6 +122,11 @@ cbind(c(alpha, beta_ab, beta_owns),
 cbind(c(beta_age[-4], beta_educ[-1]),
       log(eco_model2$ors.indiv))
 
-cbind(c(alpha, beta_ab, beta_owns),
+cbind(c(my_alpha, beta_ab, beta_owns),
       log(eco_model2$ors.ctx))
 
+### Huh, neither works. Why is this?
+### What is the maximum parameter that can be picked out by whicha?
+max(unlist(eco_model$mod$whicha))
+### What is the length of our parameters?
+length(eco_model$ors.indiv)
