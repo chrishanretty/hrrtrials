@@ -1,6 +1,6 @@
 library(tidyverse)
 
-psw <- read.csv("data/hlv_psw.csv") %>%
+psw <- read.csv("../data/hlv_psw.csv") %>%
     dplyr::select(group = GSSCode,
                   age = age0, education, weight) %>%
     dplyr::select(group, age, education, weight) %>%

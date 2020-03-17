@@ -1,6 +1,6 @@
 library(tidyverse)
 
-psw <- read.csv("data/hlv_psw.csv") %>%
+psw <- read.csv("../data/hlv_psw.csv") %>%
     dplyr::select(group = GSSCode,
                   sex, housing, weight) %>%
     mutate(isFemale = as.numeric(sex == "Female"),
