@@ -98,11 +98,18 @@ parameters {
 transformed parameters {
   vector[npsw] predp;
   vector[nareas] mu;
+  vector[age_cats] beta_age_starred;
+  vector[educ_cats] beta_educ_starred;
+
+  // Set first element to zero to match ecoreg
+  beta_educ_starred = beta_educ - beta_educ[1];
+  // Set fourth element to zero to match ecoreg
+  beta_age_starred = beta_age - beta_age[4];
 
   // generate the (weighted) probability of turnout for each psw group
   // Here I use element wise multiplication (.*) for the rows in the frame
   predp = inv_logit(pswx * beta + alpha +
-     beta_educ[psw_educ] + beta_age[psw_age]) .* w8;
+     beta_educ_starred[psw_educ] + beta_age_starred[psw_age]) .* w8;
 
   // get the sum by group
   for (a in 1:nareas) {
@@ -118,7 +125,7 @@ model {
   age_sigma ~ normal(0, 1);
 
   indy ~ bernoulli_logit(contx * beta + alpha +
-     beta_educ[ind_educ] + beta_age[ind_age]);
+     beta_educ_starred[ind_educ] + beta_age_starred[ind_age]);
   aggy ~ binomial(aggcount, mu);
 }
 
@@ -128,6 +135,76 @@ writeLines(stan_code, con = "m1.stan")
 
 the_model <- stan_model(file = "m1.stan")
 
+## Generate inits
+init_mod <- glm(y ~ p.ab + p.owns + age + education,
+                data = ind,
+                family = binomial)
+init_coefs  <- coef(init_mod)
+my_inits <- list()
+my_inits$alpha <- init_coefs[["(Intercept)"]]
+my_inits$beta <- init_coefs[c("p.owns", "p.ab")]
+my_inits$beta_educ <- c(0,
+                        init_coefs[grep("^educ", names(init_coefs))])
+my_inits$beta_age <- c(0,
+                        init_coefs[grep("^age", names(init_coefs))])
+
+### Estimate the model
+mle_samples <- optimizing(the_model,
+                          data = stan_data,
+                          hessian = TRUE,
+                          draws = 100,
+                          init = my_inits,
+                          as_vector = FALSE)
+
+### Did we achieve convergence?
+(mle_samples$return_code == 0)
+
+### Get the coefficients out from the draw
+coef_names <- c("alpha", "beta[1]", "beta[2]",
+                paste0("beta_age_starred[", 1:8, "]"),
+                paste0("beta_educ_starred[", 1:6, "]"))
+                
+### How do they look?
+coef_hat <- apply(mle_samples$theta_tilde[,coef_names], 2, median)
+coef_sd <- apply(mle_samples$theta_tilde[,coef_names], 2, sd)
+
+coef.df <- data.frame(var = coef_names,
+                      hat = coef_hat,
+                      sd = coef_sd,
+                      row.names = NULL)
+
+### Compare to the known values
+### 
+beta_age <- seq(-2, 2, length.out = 8)
+### Make the fourth group zero
+beta_age <- beta_age - beta_age[4]
+beta_educ <- c(seq(0, 4, length.out = 4),
+               -1, 0)
+
+coef.df$known <- c(-0.33,
+                0.2, 1.2,
+                beta_age,
+                beta_educ)
+
+### Plot this
+ggplot(coef.df, aes(x = var,
+                    y = hat,
+                    ymin = hat - 1.96 * sd,
+                    ymax = hat + 1.96 * sd)) +
+    geom_pointrange() +
+    geom_point(aes(x = var, y = known),
+               colour = "red",
+               size = 4,
+               alpha = 0.2) + 
+    coord_flip() +
+    scale_x_discrete("variable") +
+    scale_y_continuous("Estimate")
+
+### The coefficients are similar enough; the differences are probably
+### due to the regularization which comes from modelling the age and
+### education terms as random intercepts
+
+stop()
 ### This took way too long
 the_samples <- sampling(the_model,
                         data = stan_data,
